@@ -1,0 +1,883 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Escape Room</title>
+<link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
+<body>
+    <h3>Escape the Room - the online Game</h3>
+    <p>Hi! I am stuck in who knows where and my family is waiting for me outside! Please help me find the correct door to escape.</p>
+    <p>Obviously take both me and my treasure outside. Don't leave me empty handed. </p>
+    <p>Use the ARROW Keys to move me around, and I will let you know whether you choose the right door. </p>
+    <p>There should be 4 stages and the last one is tricky cause I WON'T be able to tell whether you picked the right door or not. Just gotta trust your instinct... </p>
+    <div class="container">
+      <img src="https://66.media.tumblr.com/tumblr_m96faflhIb1r413h3o1_400.jpg" alt="Cinque Terre" width="60" height="50">
+          <div class="topright">Don't let me die also. Thanks!</div>
+    </div>
+    
+<script src="../pixi/pixi.min.js"></script>
+
+<script>
+
+
+//Aliases
+let Application = PIXI.Application,
+    Container = PIXI.Container,
+    loader = PIXI.loader,
+    resources = PIXI.loader.resources,
+    Graphics = PIXI.Graphics,
+    TextureCache = PIXI.utils.TextureCache,
+    Sprite = PIXI.Sprite,
+    Text = PIXI.Text,
+    TextStyle = PIXI.TextStyle;
+
+//Create a Pixi Application
+let app = new Application({ 
+    width: 512, 
+    height: 512,                       
+    antialiasing: true, 
+    transparent: false, 
+    resolution: 1
+  }
+);
+
+//Add the canvas that Pixi automatically created for you to the HTML document
+document.body.appendChild(app.view);
+
+loader
+  .add("images/treasureHunter.json")
+  .load(setup);
+
+//Define variables that might be used in more 
+//than one function
+let state, explorer, treasure, blobs, chimes, exit, player, dungeon,
+    door, healthBar, message, gameScene, gameOverScene, enemies, id;
+    
+let textureButton, textureButtonDown, textureButtonOver, button;
+let doors = [];
+var Phase0 = [1,1,2,2,3,3,4,4,1];
+var Phase1 = [1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4,1];
+var Phase2 = [4,2,3,1,2,1,4,3,3,2,1,4,1,3,2,4,1,4,2,3,1];
+var Phase3 = [1,5,5,4,5,2,5,6,5,6,3,6,1,6,2,6,4,3,5,6,1];
+
+var whatPhase = 1;
+
+var trialCounter;
+var user;
+var score = '"score":[';
+var reactiontime = '"rt":[';
+var duration = '"duration":[';
+
+var prevDuration = 0;
+
+var totalScore = 0;
+var mysound;
+
+//sound
+function sound(src) {
+  this.sound = document.createElement("audio");
+  this.sound.src = src;
+  this.sound.setAttribute("preload", "auto");
+  this.sound.setAttribute("controls", "none");
+  this.sound.style.display = "none";
+  document.body.appendChild(this.sound);
+  this.play = function(){
+    this.sound.play();
+  }
+  this.stop = function(){
+    this.sound.pause();
+  }
+}
+//TIMER
+var startTime = 0;
+
+var stimulusTime = 0;
+
+var firstHit = 1; //first time hitting the treasure
+/////
+//DATABASE
+function createCORSRequest(method, url) {
+  var xhr = new XMLHttpRequest();
+  if ("withCredentials" in xhr) {
+
+    // Check if the XMLHttpRequest object has a "withCredentials" property.
+    // "withCredentials" only exists on XMLHTTPRequest2 objects.
+    xhr.open(method, url, true);
+
+  } else if (typeof XDomainRequest != "undefined") {
+
+    // Otherwise, check if XDomainRequest.
+    // XDomainRequest only exists in IE, and is IE's way of making CORS requests.
+    xhr = new XDomainRequest();
+    xhr.open(method, url);
+
+  } else {
+
+    // Otherwise, CORS is not supported by the browser.
+    xhr = null;
+
+  }
+  return xhr;
+}
+
+function getTitle(text) {
+  return text.match('<title>(.*)?</title>')[1];
+}
+
+
+//////////////////////////////////////////////
+//GAME PLAY
+function setup() {
+    //Set up new user!
+   
+   user = prompt("Please enter your name", "Name");
+
+   if (user == null || user == "") {
+      txt = "User cancelled the prompt.";
+    } else {
+      txt = "Hello " + user + "! How are you today?";
+    }
+    
+  trialCounter = 0;
+  
+  //Make the game scene and add it to the stage
+  gameScene = new Container();
+  app.stage.addChild(gameScene);
+
+  //Make the sprites and add them to the `gameScene`
+  //Create an alias for the texture atlas frame ids
+  id = resources["images/treasureHunter.json"].textures;
+
+  //Dungeon
+  dungeon = new Sprite(id["dungeon.png"]);
+  gameScene.addChild(dungeon);
+  
+  //add soundtrack
+  mysound = new sound('cheer.mp3');  //Door
+  mysound2 = new sound('cheer2.mp3');
+  mysound3 = new sound('cheer3.mp3');
+  mysound4 = new sound('cheer4.mp3');
+  mysound5 = new sound('cheer5.mp3');
+  mysound6 = new sound('cheer6.mp3');
+  mysound7 = new sound('cheer7.mp3');
+  mysound8 = new sound('boo.mp3');
+  for (i = 0; i < 5; i++){
+  doors[i] = new Sprite(id["door.png"]); 
+  if (i%2 == 0){
+  doors[i].position.set(32+100*i, 0);
+  }
+  else{
+  doors[i].position.set(32+100*i,450);
+  }
+  gameScene.addChild(doors[i]);
+  }
+  //Explorer
+  explorer = new Sprite(id["explorer.png"]);
+  explorer.x = 68;
+  explorer.y = gameScene.height / 2 - explorer.height / 2;
+  explorer.vx = 0;
+  explorer.vy = 0;
+  gameScene.addChild(explorer);
+  
+  //Treasure
+  treasure = new Sprite(id["treasure.png"]);
+  treasure.x = gameScene.width - treasure.width - 48;
+  treasure.y = gameScene.height / 2 - treasure.height / 2;
+  gameScene.addChild(treasure);
+
+  //Make the blobs
+  let numberOfBlobs = 5,
+      spacing = 48,
+      xOffset = 150,
+      speed = 2,
+      direction = 1;
+
+  //An array to store all the blob monsters
+  blobs = [];
+
+  //Make as many blobs as there are `numberOfBlobs`
+  for (let i = 0; i < numberOfBlobs; i++) {
+
+    //Make a blob
+    let blob = new Sprite(id["blob.png"]);
+
+    //Space each blob horizontally according to the `spacing` value.
+    //`xOffset` determines the point from the left of the screen
+    //at which the first blob should be added
+    let x = spacing * i + xOffset;
+
+    //Give the blob a random y position
+    let y = randomInt(0, app.stage.height - blob.height);
+
+    //Set the blob's position
+    blob.x = x;
+    blob.y = y;
+
+    //Set the blob's vertical velocity. `direction` will be either `1` or
+    //`-1`. `1` means the enemy will move down and `-1` means the blob will
+    //move up. Multiplying `direction` by `speed` determines the blob's
+    //vertical direction
+    blob.vy = speed * direction;
+
+    //Reverse the direction for the next blob
+    direction *= -1;
+
+    //Push the blob into the `blobs` array
+    blobs.push(blob);
+
+    //Add the blob to the `gameScene`
+    gameScene.addChild(blob);
+  }
+
+  //Create the health bar
+  healthBar = new Container();
+  healthBar.position.set(app.stage.width - 170, 500)
+  gameScene.addChild(healthBar);
+
+  //Create the black background rectangle
+  let innerBar = new Graphics();
+  innerBar.beginFill(0x000000);
+  innerBar.drawRect(0, 0, 128, 8);
+  innerBar.endFill();
+  healthBar.addChild(innerBar);
+
+  //Create the front red rectangle
+  let outerBar = new Graphics();
+  outerBar.beginFill(0xFF3300);
+  outerBar.drawRect(0, 0, 128, 8);
+  outerBar.endFill();
+  healthBar.addChild(outerBar);
+
+  healthBar.outer = outerBar;
+  
+  let scorestyle = new TextStyle({
+    fontFamily: "Futura",
+    fontSize: 30,
+    fill: "white"
+  });  scoreMessage = new Text("0", scorestyle);
+  scoreMessage.x = 400;
+  scoreMessage.y = app.stage.height  - 50;
+  gameScene.addChild(scoreMessage);
+
+  //Create the `gameOver` scene
+  gameOverScene = new Container();
+  app.stage.addChild(gameOverScene);
+
+  //Create Play Button
+  // create some textures from an image path
+  textureButton = PIXI.Texture.fromImage('https://dl.dropboxusercontent.com/s/mi2cibdajml8qj9/arrow_wait.png?dl=0');
+  textureButtonDown = PIXI.Texture.fromImage('https://dl.dropboxusercontent.com/s/m0x11c91wazehyp/arrow_error.png?dl=0');
+  textureButtonOver = PIXI.Texture.fromImage('https://dl.dropboxusercontent.com/s/1kuhddt8p9tr0k8/arrow_wait.png?dl=0');
+
+  button = new PIXI.Sprite(textureButton);
+  button.buttonMode = true;
+
+  button.anchor.set(0.5);
+  button.x = 250;
+  button.y = 200;
+
+      // make the button interactive...
+  button.interactive = true;
+  button.buttonMode = true;
+
+  button
+          // Mouse & touch events are normalized into
+          // the pointer* events for handling different
+          // button events.
+          .on('pointerdown', onButtonDown)
+          .on('pointerup', onButtonUp)
+          .on('pointerupoutside', onButtonUp)
+          .on('pointerover', onButtonOver)
+          .on('pointerout', onButtonOut);
+
+          // Use mouse-only events
+          // .on('mousedown', onButtonDown)
+          // .on('mouseup', onButtonUp)
+          // .on('mouseupoutside', onButtonUp)
+          // .on('mouseover', onButtonOver)
+          // .on('mouseout', onButtonOut)
+
+          // Use touch-only events
+          // .on('touchstart', onButtonDown)
+          // .on('touchend', onButtonUp)
+          // .on('touchendoutside', onButtonUp)
+
+      // add it to the stage
+  gameOverScene.addChild(button);
+  // let blurs = new PIXI.filters.BlurFilter();
+
+  // blurs.blur = 0;
+  // TweenLite.to(blurs, 1.5, {blur:10, onComplete:blurin, ease: Power2.easeIn});
+  // var blurin = function(){
+  //   TweenLite.to(blurs, 1, {blur:0});
+  // }
+ // gameOverScene.addChild(button)
+  //Make the `gameOver` scene invisible when the game first starts
+  gameOverScene.visible = false;
+
+  //Create the text sprite and add it to the `gameOver` scene
+  let style = new TextStyle({
+    fontFamily: "Futura",
+    fontSize: 64,
+    fill: "white"
+  });
+  
+  
+  message = new Text("The End!", style);
+  message.x = 120;
+  message.y = app.stage.height / 2 - 32;
+  gameOverScene.addChild(message);
+
+  //Capture the keyboard arrow keys
+  let left = keyboard(37),
+      up = keyboard(38),
+      right = keyboard(39),
+      down = keyboard(40);
+  //Left arrow key `press` method
+  left.press = function() {
+
+    //Change the explorer's velocity when the key is pressed
+    explorer.vx = -5;
+    explorer.vy = 0;
+  };
+
+  //Left arrow key `release` method
+  left.release = function() {
+
+    //If the left arrow has been released, and the right arrow isn't down,
+    //and the explorer isn't moving vertically:
+    //Stop the explorer
+    if (!right.isDown && explorer.vy === 0) {
+      explorer.vx = 0;
+    }
+  };
+
+  //Up
+  up.press = function() {
+    explorer.vy = -5;
+    explorer.vx = 0;
+  };
+  up.release = function() {
+    if (!down.isDown && explorer.vx === 0) {
+      explorer.vy = 0;
+    }
+  };
+
+  //Right
+  right.press = function() {
+    explorer.vx = 5;
+    explorer.vy = 0;
+  };
+  right.release = function() {
+    if (!left.isDown && explorer.vy === 0) {
+      explorer.vx = 0;
+    }
+  };
+
+  //Down
+  down.press = function() {
+    explorer.vy = 5;
+    explorer.vx = 0;
+  };
+  down.release = function() {
+    if (!up.isDown && explorer.vx === 0) {
+      explorer.vy = 0;
+    }
+  };
+
+  //Set the game state
+  state = play;
+  whatPhase = 1;
+  firstHit = 1; //first time hitting the treasure;
+  startTime = performance.now();
+  //Start the game loop 
+  app.ticker.add(delta => gameLoop(delta));
+}
+
+
+function gameLoop(delta){
+  //Update the current game state:
+  state(delta);
+}
+
+function play(delta) {
+  gameScene.visible=true;
+  gameOverScene.visible = false;
+  //use the explorer's velocity to make it move
+  explorer.x += explorer.vx;
+  explorer.y += explorer.vy;
+
+  //Contain the explorer inside the area of the dungeon
+  contain(explorer, {x: 28, y: 10, width: 488, height: 480});
+  //contain(explorer, stage);
+
+  //Set `explorerHit` to `false` before checking for a collision
+  let explorerHit = false;
+
+  //Loop through all the sprites in the `enemies` array
+  blobs.forEach(function(blob) {
+
+    //Move the blob
+    blob.y += blob.vy;
+
+    //Check the blob's screen boundaries
+    let blobHitsWall = contain(blob, {x: 28, y: 10, width: 488, height: 480});
+
+    //If the blob hits the top or bottom of the stage, reverse
+    //its direction
+    if (blobHitsWall === "top" || blobHitsWall === "bottom") {
+      blob.vy *= -1;
+    }
+
+    //Test for a collision. If any of the enemies are touching
+    //the explorer, set `explorerHit` to `true`
+    if(hitTestRectangle(explorer, blob)) {
+      explorerHit = true;
+    }
+  });
+
+  //If the explorer is hit...
+  if(explorerHit) {
+
+    //Make the explorer semi-transparent
+    explorer.alpha = 0.5;
+
+    //Reduce the width of the health bar's inner rectangle by 1 pixel
+    healthBar.outer.width -= 1;
+
+  } else {
+
+    //Make the explorer fully opaque (non-transparent) if it hasn't been hit
+    explorer.alpha = 1;
+  }
+  
+  var doornum1;
+  var doornum2;
+  
+  //what phase are we in?
+  var gamePhase;
+  switch (whatPhase){
+      case 1:
+      gamePhase = Array.from(Phase0);
+      break;
+      case 2:
+      gamePhase = Array.from(Phase1);
+      break;
+      case 3:
+      gamePhase = Array.from(Phase2);
+      break;
+      case 4:
+      gamePhase = Array.from(Phase3);
+      break;
+      default:
+      gamePhase = Array.from(Phase0);
+      break;
+      
+  }
+  
+  //what door should appear?
+  switch(gamePhase[trialCounter]) {
+    case 1: //a vs b
+      // code block
+      doornum1 = 0;
+      doornum2 = 1;
+      break;
+    case 2: //b vs c
+      // code block
+      doornum1 = 1;
+      doornum2 = 2;
+      break;
+    case 3: //c vs d
+      doornum1 = 2;
+      doornum2 = 3;
+      break;
+    case 4: //d vs e
+      doornum1 = 3;
+      doornum2 = 4;
+      break;
+    case 5:
+      doornum1 = 1;
+      doornum2 = 3;
+    case 6:
+      doornum1 = 0;
+      doornum2 = 4;
+      break;
+    default:
+      doornum1 = 0;
+      doornum2 = 1;
+      break;
+      // code block
+  }  //Check for a collision between the explorer and the treasure
+  if (hitTestRectangle(explorer, treasure)) {
+      //time stimulus appears
+     if (firstHit){
+         stimulusTime = performance.now();
+         firstHit = 0;
+     }
+    //If the treasure is touching the explorer, center it over the explorer
+    treasure.x = explorer.x + 8;
+    treasure.y = explorer.y + 8;
+    
+    for (i=0;i<5;i++){
+    doors[i].alpha = 0.1;
+    }
+    doors[doornum1].alpha = 1;
+    doors[doornum2].alpha = 1;
+  }
+  //Does the explorer have enough health? If the width of the `innerBar`
+  //is less than zero, end the game and display "You lost!"
+  if (healthBar.outer.width < 0) {
+    state = sendData;
+    message.text = "You lost!";
+  }
+
+  //If the explorer has brought the treasure to the exit,
+  //end the game and display "You won!"
+  
+  if (hitTestRectangle(treasure, doors[doornum1])) {
+      if (whatPhase != 4){
+          state = congrats;
+      }
+      else {
+          state = rightchoice;
+      }
+    message.text = "Good job!";
+  } 
+  if (hitTestRectangle(treasure,doors[doornum2])) {
+      if (whatPhase != 4){
+          state = punish;
+      }
+      else {
+          state = wrongchoice;
+      }
+    message.text = "Wrong door!";
+   }
+  
+  if (trialCounter == (gamePhase.length - 1)){
+      state = sendData;
+      message.text = "Next Level?";
+  }
+ 
+}
+
+function punish(delta) {
+    mysound8.play();
+    state = wrongchoice;
+    //update score
+    totalScore = totalScore;
+    scoreMessage.text = totalScore.toString();
+}
+
+function congrats(delta) {
+    healthBar.outer.width = 128;
+    switch (Math.floor((Math.random() * 7) + 1)){
+        case 1:
+        mysound.play();
+        break;
+        case 2:
+        mysound2.play();
+        break;
+        case 3:
+        mysound3.play();
+        break;
+        case 4:
+        mysound4.play();
+        break;
+        case 5:
+        mysound5.play();
+        break;
+        case 6:
+        mysound6.play();
+        break;
+        case 7:
+        mysound7.play();
+        break;
+        default:
+        mysound6.play();
+        break;
+    }
+    //update score
+    totalScore = totalScore + 1;
+    scoreMessage.text = totalScore.toString();
+    state = rightchoice;
+    
+}
+
+function wrongchoice(delta) {
+
+    firstHit = 1; //reset first hit
+
+    //temp for reaction time
+    var RT = performance.now() - stimulusTime;
+    //temp for duration
+    var triallength;
+    triallength = performance.now() - startTime;
+    
+    for (i=0;i<5;i++){
+    doors[i].alpha = 0;
+    }
+    state = play;
+    treasure.x = gameScene.width - treasure.width - 48
+    treasure.y = gameScene.height / 2 - treasure.height / 2;
+    trialCounter = trialCounter + 1;
+    
+    score = score + '{"iter":0},';
+    reactiontime = reactiontime + '{"iter":' + RT + '},';
+    duration = duration + '{"iter":' + triallength + '},';
+}
+function rightchoice(delta) {
+
+    firstHit = 1; //reset first hit
+
+    //temp for reaction time
+    var RT = performance.now() - stimulusTime;
+    //temp for duration
+    var triallength;
+    triallength = performance.now() - startTime;
+    
+    for (i=0;i<5;i++){
+    doors[i].alpha = 0;
+    }
+
+    state = play;
+    //randomized location of treasure
+    treasure.x = gameScene.width - treasure.width - (Math.floor(Math.random() * 200) + 48); ;
+    treasure.y = gameScene.height / 2 - treasure.height / 2;
+    trialCounter = trialCounter + 1;
+    score = score + '{"iter":1},';
+    reactiontime = reactiontime + '{"iter":' + RT + '},';
+    duration = duration + '{"iter":' + triallength + '},';
+}
+function sendData(){
+    //SEND THE DATA HERE
+    //remove ,
+    reactiontime = reactiontime.substring(0,reactiontime.length - 1) + ']';
+    score = score.substring(0,score.length - 1) + ']';
+    duration = duration.substring(0,duration.length - 1) + ']';
+
+    var text = '{"username":' + '"' + user + '_phase' + whatPhase.toString() +'"' + ',' + score + ',' + reactiontime + ',' + duration + '}';
+    //var jsondata = JSON.parse('{"username":' + user + ',' + score + ',' + duration + '}');
+    console.log(text);
+    var jsondata = JSON.parse(text);
+    //console.log(jsondata);
+    var data = JSON.stringify(jsondata);
+    url = 'http://localhost:3000/players';
+    var xhr = createCORSRequest('POST', url);
+       if (!xhr) {
+         throw new Error('CORS not supported');
+       }
+    // xhr.open("POST", myUrl, true);
+     //xhr.setRequestHeader('X-PINGOTHER', 'pingpong');
+
+     xhr.setRequestHeader('Content-Type', 'application/json');
+     
+     xhr.onload = function() {
+       var text = xhr.responseText;
+       console.log(text);
+    //   var title = getTitle(text);
+    //   alert('Response from CORS request to ' + url + ': ' + title);
+     };
+
+     xhr.onerror = function() {
+       alert('Woops, there was an error making the request.');
+     };
+     xhr.send(data);
+     if (whatPhase == 4){
+         message.text = "Thank you!";
+         button.interactive = false;
+          button.buttonMode = false;
+          button.visible = false;
+     }
+     totalScore = 0;
+     scoreMessage.text = totalScore.toString(); //update score messages
+     state = end;
+}
+
+function end() {
+//Reset everything
+  gameScene.visible = false;
+  gameOverScene.visible = true;
+  
+  //reset JSON string
+  score = '"score":[';
+  reactiontime = '"rt":[';
+  duration = '"duration":[';
+
+  //var data = JSON.stringify({"username":"m","score":[{"iter":1},{"iter":0},{"iter":1},{"iter":1}],"duration":[{"iter":5.2},{"iter":3.2},{"iter":3.1},{"iter":2.4}]});
+
+}
+
+
+
+/* Helper functions */
+function onButtonDown() {
+    //start new phase
+    this.isdown = true;
+    this.texture = textureButtonDown;
+    this.alpha = 1;
+    whatPhase = whatPhase + 1;
+
+    trialCounter = 0;
+    totalScore = 0;
+    startTime = performance.now() //reset startTimer for next phase
+    prevDuration = 0;
+    state = play;
+}
+
+function onButtonUp() {
+    this.isdown = false;
+    if (this.isOver) {
+        this.texture = textureButtonOver;
+    }
+    else {
+        this.texture = textureButton;
+    }
+}
+
+function onButtonOver() {
+    this.isOver = true;
+    if (this.isdown) {
+        return;
+    }
+    this.texture = textureButtonOver;
+}
+
+function onButtonOut() {
+    this.isOver = false;
+    if (this.isdown) {
+        return;
+    }
+    this.texture = textureButton;
+}
+
+
+function contain(sprite, container) {
+
+  let collision = undefined;
+
+  //Left
+  if (sprite.x < container.x) {
+    sprite.x = container.x;
+    collision = "left";
+  }
+
+  //Top
+  if (sprite.y < container.y) {
+    sprite.y = container.y;
+    collision = "top";
+  }
+
+  //Right
+  if (sprite.x + sprite.width > container.width) {
+    sprite.x = container.width - sprite.width;
+    collision = "right";
+  }
+
+  //Bottom
+  if (sprite.y + sprite.height > container.height) {
+    sprite.y = container.height - sprite.height;
+    collision = "bottom";
+  }
+
+  //Return the `collision` value
+  return collision;
+}
+
+//The `hitTestRectangle` function
+function hitTestRectangle(r1, r2) {
+
+  //Define the variables we'll need to calculate
+  let hit, combinedHalfWidths, combinedHalfHeights, vx, vy;
+
+  //hit will determine whether there's a collision
+  hit = false;
+
+  //Find the center points of each sprite
+  r1.centerX = r1.x + r1.width / 2; 
+  r1.centerY = r1.y + r1.height / 2; 
+  r2.centerX = r2.x + r2.width / 2; 
+  r2.centerY = r2.y + r2.height / 2; 
+
+  //Find the half-widths and half-heights of each sprite
+  r1.halfWidth = r1.width / 2;
+  r1.halfHeight = r1.height / 2;
+  r2.halfWidth = r2.width / 2;
+  r2.halfHeight = r2.height / 2;
+
+  //Calculate the distance vector between the sprites
+  vx = r1.centerX - r2.centerX;
+  vy = r1.centerY - r2.centerY;
+
+  //Figure out the combined half-widths and half-heights
+  combinedHalfWidths = r1.halfWidth + r2.halfWidth;
+  combinedHalfHeights = r1.halfHeight + r2.halfHeight;
+
+  //Check for a collision on the x axis
+  if (Math.abs(vx) < combinedHalfWidths) {
+
+    //A collision might be occurring. Check for a collision on the y axis
+    if (Math.abs(vy) < combinedHalfHeights) {
+
+      //There's definitely a collision happening
+      hit = true;
+    } else {
+
+      //There's no collision on the y axis
+      hit = false;
+    }
+  } else {
+
+    //There's no collision on the x axis
+    hit = false;
+  }
+
+  //`hit` will be either `true` or `false`
+  return hit;
+};
+
+
+//The `randomInt` helper function
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+//The `keyboard` helper function
+function keyboard(keyCode) {
+  var key = {};
+  key.code = keyCode;
+  key.isDown = false;
+  key.isUp = true;
+  key.press = undefined;
+  key.release = undefined;
+  //The `downHandler`
+  key.downHandler = function(event) {
+    if (event.keyCode === key.code) {
+      if (key.isUp && key.press) key.press();
+      key.isDown = true;
+      key.isUp = false;
+    }
+    event.preventDefault();
+  };
+
+  //The `upHandler`
+  key.upHandler = function(event) {
+    if (event.keyCode === key.code) {
+      if (key.isDown && key.release) key.release();
+      key.isDown = false;
+      key.isUp = true;
+    }
+    event.preventDefault();
+  };
+
+  //Attach event listeners
+  window.addEventListener(
+    "keydown", key.downHandler.bind(key), false
+  );
+  window.addEventListener(
+    "keyup", key.upHandler.bind(key), false
+  );
+  return key;
+}
+
+</script>
+</body>
+
+
