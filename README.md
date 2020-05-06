@@ -1,2 +1,2 @@
 # DoorEscapeGame
-Puzzle solving Game
+Puzzle solving Game created using PixiJS
