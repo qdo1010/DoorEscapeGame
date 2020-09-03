@@ -56,6 +56,8 @@ let doors = [];
 var Phase0 = [1,1,2,2,3,3,4,4,1];
 var Phase1 = [1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4,1];
 var Phase2 = [4,2,3,1,2,1,4,3,3,2,1,4,1,3,2,4,1,4,2,3,1];
+//['DE','BC','CD','AB','BC','AB','DE','CD','CD','BC','AB','DE','AB','CD','BC','DE','AB','DE','BC','CD']
+//['AB','BD','BD','DE','BD','BC','BD','AE','BD','AE','CD','AE','AB','AE','BC','AE','DE','CD','BD','AE']
 var Phase3 = [1,5,5,4,5,2,5,6,5,6,3,6,1,6,2,6,4,3,5,6,1];
 
 var whatPhase = 1;
@@ -128,13 +130,15 @@ function getTitle(text) {
 function setup() {
     //Set up new user!
    
-   user = prompt("Please enter your name", "Name");
+   user = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+   console.log(user)
+   //prompt("Please enter your name", "Name");
 
-   if (user == null || user == "") {
-      txt = "User cancelled the prompt.";
-    } else {
-      txt = "Hello " + user + "! How are you today?";
-    }
+   //if (user == null || user == "") {
+   //   txt = "User cancelled the prompt.";
+   // } else {
+   //  txt = "Hello " + user + "! How are you today?";
+   // }
     
   trialCounter = 0;
   
